@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏮 元宵節雙語猜燈謎大會</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .font-serif { font-family: 'Noto Serif TC', serif; }
+        .lantern-shadow { box-shadow: 0 0 50px rgba(255, 200, 0, 0.6); }
+        .animate-bounce-slow { animation: bounce 3s infinite; }
+        @keyframes bounce { 0%, 100% { transform: translateY(-5%); } 50% { transform: translateY(5%); } }
+        .animate-fade-in { animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-red-900 text-gray-100 min-h-screen overflow-hidden relative selection:bg-yellow-500 selection:text-red-900">
+
+    <!-- 裝飾 -->
+    <div class="absolute top-0 left-8 w-20 h-32 bg-red-600 rounded-b-3xl opacity-90 border-t-8 border-yellow-600 z-0 flex items-center justify-center animate-bounce-slow lantern-shadow">
+        <span class="text-yellow-300 text-4xl font-serif font-bold opacity-60 mt-4">春</span>
+    </div>
+    <div class="absolute top-0 right-8 w-20 h-32 bg-red-600 rounded-b-3xl opacity-90 border-t-8 border-yellow-600 z-0 flex items-center justify-center animate-bounce-slow lantern-shadow" style="animation-delay: 1.5s;">
+        <span class="text-yellow-300 text-4xl font-serif font-bold opacity-60 mt-4">福</span>
+    </div>
+
+    <!-- App 容器 -->
+    <div id="app" class="relative z-10 container mx-auto px-4 py-4 max-w-6xl h-screen flex flex-col">
+        <nav class="flex justify-between items-center mb-4 bg-black/30 p-3 rounded-2xl backdrop-blur-md border border-white/10 z-50">
+            <div class="flex items-center gap-2">
+                <div id="status-badge" class="px-3 py-1 rounded-full text-xs font-bold bg-gray-600 text-gray-300 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-current animate-pulse"></span>
+                    <span id="status-text">連線中...</span>
+                </div>
+            </div>
+            <div class="flex gap-2 text-xs">
+                <button onclick="router('welcome')" class="border border-white/20 px-3 py-1 rounded hover:bg-white hover:text-red-900 transition">首頁</button>
+                <button onclick="router('dashboard')" class="border border-white/20 px-3 py-1 rounded hover:bg-white hover:text-red-900 transition">大螢幕</button>
+                <button onclick="router('admin')" class="bg-yellow-600 text-black px-3 py-1 rounded font-bold hover:bg-yellow-500 transition">後台</button>
+            </div>
+        </nav>
+
+        <main id="view-container" class="flex-grow flex flex-col relative w-full overflow-hidden"></main>
+    </div>
+
+    <script>
+        // ==========================================
+        // ⚙️ Google Apps Script API 網址 (已綁定)
+        // ==========================================
+        const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbxOiHFTrGIgUKCOhStPgFG9tq-gWO8aDaVyVoqNaMD2tFPO8U6i7nBdrGpky8Wt4wr1Eg/exec';
+
+        // 📝 內建 40 道雙語題庫
+        const BUILT_IN_RIDDLES = [
+            { cn: "有頭沒有頸，身上冷冰冰，有翅不能飛，無腳也能行。", en: "Has a head but no neck, feels ice cold, has wings but can't fly, no legs but can move.", ans: "魚 (Fish)", opts: ["魚 (Fish)", "蛇 (Snake)", "鳥 (Bird)", "烏龜 (Turtle)"] },
+            { cn: "年紀並不大，鬍子一大把，不管見到誰，總愛叫媽媽。", en: "Not old, but has a long beard, calls everyone 'mom'.", ans: "羊 (Goat)", opts: ["貓 (Cat)", "羊 (Goat)", "狗 (Dog)", "老鼠 (Mouse)"] },
+            { cn: "頭戴紅帽子，身穿白袍子，走路擺架子，說話伸脖子。", en: "Wears a red hat and white robe, walks with a swagger, stretches its neck when talking.", ans: "鵝 (Goose)", opts: ["雞 (Chicken)", "鴨 (Duck)", "鵝 (Goose)", "孔雀 (Peacock)"] },
+            { cn: "耳朵像蒲扇，身子像小山，鼻子長又長，幫人把活幹。", en: "Ears like fans, body like a hill, nose is very long, helps people work.", ans: "大象 (Elephant)", opts: ["牛 (Cow)", "大象 (Elephant)", "馬 (Horse)", "犀牛 (Rhino)"] },
+            { cn: "身穿梅花袍，頭上頂飛刀，秋天落葉飄，山裡跑得跑。", en: "Wears a plum blossom robe, has flying knives on its head, runs in the mountains in autumn.", ans: "梅花鹿 (Deer)", opts: ["老虎 (Tiger)", "梅花鹿 (Deer)", "豹 (Leopard)", "狐狸 (Fox)"] },
+            { cn: "兄弟七八個，圍著柱子坐，大家一分手，衣服就扯破。", en: "Seven or eight brothers sitting around a pillar, when they part, their clothes tear.", ans: "大蒜 (Garlic)", opts: ["洋蔥 (Onion)", "大蒜 (Garlic)", "蘋果 (Apple)", "橘子 (Orange)"] },
+            { cn: "黃包袱，包黑豆，嘗一口，甜水流。", en: "Yellow bundle, wrapped black beans, take a bite, sweet water flows.", ans: "木瓜 (Papaya)", opts: ["香蕉 (Banana)", "西瓜 (Watermelon)", "木瓜 (Papaya)", "芒果 (Mango)"] },
+            { cn: "紅關公，白劉備，黑張飛，參玖在一塊。", en: "Red Guan Yu, White Liu Bei, Black Zhang Fei, all together.", ans: "荔枝 (Lychee)", opts: ["蘋果 (Apple)", "葡萄 (Grape)", "荔枝 (Lychee)", "水蜜桃 (Peach)"] },
+            { cn: "生在樹上是青的，落到地上是黃的，不用刀削是圓的，不加糖蜜是甜的。", en: "Green on the tree, yellow on the ground, round without peeling, sweet without sugar.", ans: "桂圓 (Longan)", opts: ["荔枝 (Lychee)", "桂圓 (Longan)", "蘋果 (Apple)", "香蕉 (Banana)"] },
+            { cn: "小小紅壇子，裝滿紅餃子，吃掉紅餃子，吐出白珠子。", en: "Small red jar filled with red dumplings, eat the red dumplings, spit out white beads.", ans: "橘子 (Orange)", opts: ["蘋果 (Apple)", "橘子 (Orange)", "草莓 (Strawberry)", "櫻桃 (Cherry)"] },
+            { cn: "有面沒有口，有腳沒有手，雖有四隻腳，自己不會走。", en: "Has a face but no mouth, has legs but no hands, has four legs but can't walk.", ans: "桌子 (Table)", opts: ["椅子 (Chair)", "床 (Bed)", "桌子 (Table)", "櫃子 (Cabinet)"] },
+            { cn: "白白一片似雪花，落下水裡不見它，單獨吃它會皺眉，不吃它時淡無味。", en: "White like snowflake, disappears in water, tastes sour alone, tasteless without it.", ans: "鹽 (Salt)", opts: ["糖 (Sugar)", "麵粉 (Flour)", "鹽 (Salt)", "味精 (MSG)"] },
+            { cn: "身穿花衣裳，個子細又長。寫字又畫畫，越長越變短。", en: "Wears colorful clothes, tall and thin. Writes and draws, gets shorter as it grows.", ans: "鉛筆 (Pencil)", opts: ["鉛筆 (Pencil)", "橡皮擦 (Eraser)", "尺 (Ruler)", "剪刀 (Scissors)"] },
+            { cn: "有嘴不能說話，有肚子不吃東西，每天喝水很多，卻不長一塊肉。", en: "Has a mouth but can't speak, has a belly but doesn't eat, drinks lots of water but doesn't gain weight.", ans: "茶壺 (Teapot)", opts: ["水杯 (Cup)", "茶壺 (Teapot)", "花瓶 (Vase)", "碗 (Bowl)"] },
+            { cn: "四四方方一塊布，嘴和鼻子都蓋住，兩根帶子耳上掛，不怕風沙不怕土。", en: "Square piece of cloth, covers mouth and nose, strings on ears, not afraid of dust.", ans: "口罩 (Mask)", opts: ["帽子 (Hat)", "圍巾 (Scarf)", "口罩 (Mask)", "手套 (Glove)"] },
+            { cn: "有時圓圓像個盤子，有時彎彎像隻船，白天看不見，晚上才出來。", en: "Sometimes round like a plate, sometimes curved like a boat, invisible by day, comes out at night.", ans: "月亮 (Moon)", opts: ["太陽 (Sun)", "星星 (Star)", "月亮 (Moon)", "雲彩 (Cloud)"] },
+            { cn: "千根線，萬根線，掉到水裡看不見。", en: "Thousands of threads, fall into the water and disappear.", ans: "雨 (Rain)", opts: ["雪 (Snow)", "風 (Wind)", "雨 (Rain)", "冰 (Ice)"] },
+            { cn: "看不見，摸不到，四面八方到處跑，跑過江河水生波，穿過森林樹呼嘯。", en: "Invisible, untouchable, runs everywhere, makes waves on rivers, makes trees roar.", ans: "風 (Wind)", opts: ["空氣 (Air)", "光 (Light)", "風 (Wind)", "聲音 (Sound)"] },
+            { cn: "小白花，飛滿天，下到地上像白麵，下到水裡看不見。", en: "Small white flowers flying in the sky, falls to the ground like white flour, disappears in water.", ans: "雪 (Snow)", opts: ["雨 (Rain)", "雪 (Snow)", "霜 (Frost)", "雲 (Cloud)"] },
+            { cn: "紅彤彤，一大蓬，見風它就逞兇狂，無嘴能吃天下物，單怕雨水不怕風。", en: "Red and fluffy, gets fierce in the wind, eats everything without a mouth, afraid of water but not wind.", ans: "火 (Fire)", opts: ["水 (Water)", "土 (Earth)", "火 (Fire)", "木 (Wood)"] },
+            { cn: "外面穿綠衣，裡面紅瓤瓤，黑黑小籽籽，夏天最愛吃。", en: "Wears green outside, red inside, small black seeds, favorite in summer.", ans: "西瓜 (Watermelon)", opts: ["西瓜 (Watermelon)", "哈密瓜 (Melon)", "蘋果 (Apple)", "葡萄 (Grape)"] },
+            { cn: "白糖梅子真稀奇，也沒核兒也沒皮，肉兒薄薄全兜水，只要一口吃到底。", en: "White sugar plum is rare, no pit and no skin, thin flesh holds water, eat it in one bite.", ans: "湯圓 (Tangyuan)", opts: ["水餃 (Dumpling)", "包子 (Baozi)", "湯圓 (Tangyuan)", "饅頭 (Mantou)"] },
+            { cn: "外面白茫茫，裡面黃澄澄，煮熟軟綿綿，營養真豐富。", en: "White outside, yellow inside, soft when boiled, very nutritious.", ans: "雞蛋 (Egg)", opts: ["豆腐 (Tofu)", "雞蛋 (Egg)", "馬鈴薯 (Potato)", "起司 (Cheese)"] },
+            { cn: "彎彎像月亮，黃黃像香蕉，吃在嘴裡甜又香。", en: "Curved like a moon, yellow like a banana, sweet and fragrant in the mouth.", ans: "香蕉 (Banana)", opts: ["芒果 (Mango)", "蘋果 (Apple)", "橘子 (Orange)", "香蕉 (Banana)"] },
+            { cn: "紅紅臉蛋圓又圓，吃在嘴裡脆又甜。", en: "Red face, round and round, crisp and sweet in the mouth.", ans: "蘋果 (Apple)", opts: ["草莓 (Strawberry)", "櫻桃 (Cherry)", "西瓜 (Watermelon)", "蘋果 (Apple)"] },
+            { cn: "兩隻小船，沒有木頭，白天到處走，晚上客廳留。", en: "Two small boats, no wood, walk around by day, stay in the living room at night.", ans: "鞋子 (Shoes)", opts: ["襪子 (Socks)", "帽子 (Hat)", "手套 (Gloves)", "鞋子 (Shoes)"] },
+            { cn: "一朵花，真奇怪，晴天不開雨天開。", en: "A flower, very strange, blooms on rainy days not sunny days.", ans: "雨傘 (Umbrella)", opts: ["雨衣 (Raincoat)", "雨靴 (Rain boots)", "帽子 (Hat)", "雨傘 (Umbrella)"] },
+            { cn: "有眼沒有珠，有腳不能走，有背沒有脊，有肚沒有腸。", en: "Has eyes but no pupils, has legs but can't walk, has a back but no spine, has a belly but no intestines.", ans: "椅子 (Chair)", opts: ["桌子 (Table)", "床 (Bed)", "沙發 (Sofa)", "椅子 (Chair)"] },
+            { cn: "尖尖嘴，細細腿，狡猾多疑跑得快。", en: "Pointy mouth, thin legs, cunning and suspicious, runs fast.", ans: "狐狸 (Fox)", opts: ["狼 (Wolf)", "狗 (Dog)", "貓 (Cat)", "狐狸 (Fox)"] },
+            { cn: "弟弟長，哥哥短，兩人賽跑大家看。", en: "Younger brother is long, older brother is short, everyone watches them race.", ans: "時鐘 (Clock)", opts: ["手錶 (Watch)", "時鐘 (Clock)", "溫度計 (Thermometer)", "指南針 (Compass)"] },
+            { cn: "兄弟幾十個，分成兩半坐，每天早上來，幫你洗白白。", en: "Dozens of brothers, split in two halves, come every morning to help you wash white.", ans: "牙刷 (Toothbrush)", opts: ["牙刷 (Toothbrush)", "梳子 (Comb)", "毛巾 (Towel)", "肥皂 (Soap)"] },
+            { cn: "一把小排骨，沒有肉和肚，每天早上來，頭上跳個舞。", en: "A small row of ribs, no meat or belly, comes every morning to dance on your head.", ans: "梳子 (Comb)", opts: ["梳子 (Comb)", "牙刷 (Toothbrush)", "夾子 (Clip)", "剪刀 (Scissors)"] },
+            { cn: "你笑他也笑，你哭他也哭，你問他是誰，他說不知道。", en: "You smile it smiles, you cry it cries, ask who it is, it says it doesn't know.", ans: "鏡子 (Mirror)", opts: ["鏡子 (Mirror)", "照片 (Photo)", "電視 (TV)", "窗戶 (Window)"] },
+            { cn: "八隻腳，抬面鼓，兩把剪刀鼓前舞。", en: "Eight legs, carrying a drum, two scissors dancing in front.", ans: "螃蟹 (Crab)", opts: ["螃蟹 (Crab)", "蝦子 (Shrimp)", "烏龜 (Turtle)", "青蛙 (Frog)"] },
+            { cn: "名字叫做牛，不會拉犁頭，說它力氣小，背著房子走。", en: "Named a cow but can't pull a plow, said to be weak but carries a house walking.", ans: "蝸牛 (Snail)", opts: ["烏龜 (Turtle)", "蝸牛 (Snail)", "毛毛蟲 (Caterpillar)", "螞蟻 (Ant)"] },
+            { cn: "小時候有尾巴，長大後大嘴巴，抓蟲子最內行，呱呱呱叫媽媽。", en: "Has a tail when young, big mouth when grown up, best at catching bugs, croaks mama.", ans: "青蛙 (Frog)", opts: ["青蛙 (Frog)", "蟾蜍 (Toad)", "魚 (Fish)", "鴨子 (Duck)"] },
+            { cn: "頭上兩根鬚，身穿花衣衫，飛在花叢裡，快樂又美麗。", en: "Two antennae on the head, wears colorful clothes, flies among the flowers, happy and beautiful.", ans: "蝴蝶 (Butterfly)", opts: ["蜜蜂 (Bee)", "蝴蝶 (Butterfly)", "蜻蜓 (Dragonfly)", "蒼蠅 (Fly)"] },
+            { cn: "不是鳥兒天上飛，不是魚兒海裡游，肚子裝著許多人，帶你出國去旅遊。", en: "Not a bird flying in the sky, not a fish swimming in the sea, belly full of people, takes you abroad to travel.", ans: "飛機 (Airplane)", opts: ["熱氣球 (Hot air balloon)", "飛機 (Airplane)", "直升機 (Helicopter)", "火箭 (Rocket)"] },
+            { cn: "圓圓胖胖肚子大，衣服五顏六色花，只要一根線拉住，就能飄到天上去。", en: "Round and fat big belly, colorful clothes, just hold it with a thread, and it can float to the sky.", ans: "氣球 (Balloon)", opts: ["風箏 (Kite)", "氣球 (Balloon)", "泡泡 (Bubble)", "雲 (Cloud)"] },
+            { cn: "兩把刀，交叉抱，咬一口，布就掉。", en: "Two knives, crossed and hugged, take a bite, the cloth falls.", ans: "剪刀 (Scissors)", opts: ["刀子 (Knife)", "剪刀 (Scissors)", "鉗子 (Pliers)", "筷子 (Chopsticks)"] }
+        ];
+
+        // 系統狀態
+        const state = {
+            view: 'welcome',
+            user: { class: '', name: '', score: 0, answers: [] },
+            participants: [],
+            winners: JSON.parse(localStorage.getItem('lantern_winners') || '[]'), 
+            riddles: [...BUILT_IN_RIDDLES], 
+            activeRiddles: [], 
+            gameStatus: 'loading',
+            timer: null,
+            isAdmin: false,
+            TOTAL_QUESTIONS: 5 
+        };
+
+        // 取得管理員密碼 (預設 admin，可於後台修改)
+        function getAdminPwd() {
+            return localStorage.getItem('admin_pwd') || 'admin';
+        }
+
+        // 🛠️ 實用工具：陣列洗牌 (Fisher-Yates Shuffle)
+        function shuffleArray(array) {
+            let curId = array.length;
+            while (0 !== curId) {
+                let randId = Math.floor(Math.random() * curId);
+                curId -= 1;
+                let tmp = array[curId];
+                array[curId] = array[randId];
+                array[randId] = tmp;
+            }
+            return array;
+        }
+
+        window.onload = () => {
+            lucide.createIcons();
+            router('welcome');
+            fetchData();
+            setInterval(fetchData, 5000); 
+        };
+
+        // 讀取資料
+        async function fetchData() {
+            if(!GAS_API_URL.startsWith('http')) return;
+            try {
+                const res = await fetch(GAS_API_URL);
+                const data = await res.json();
+                state.gameStatus = data.status || 'idle';
+                state.participants = data.participants || [];
+                
+                if(data.riddles && data.riddles.length >= 5) {
+                    state.riddles = data.riddles;
+                }
+                
+                updateStatusUI();
+                if (state.view === 'dashboard') {
+                    renderDashboardUI();
+                }
+                if (state.view === 'welcome') updateWelcomeButton();
+                if (state.view === 'admin' && state.isAdmin) renderRiddleTable();
+            } catch (e) {
+                console.error("API Error", e);
+                document.getElementById('status-text').innerText = "連線失敗";
+            }
+        }
+
+        function updateStatusUI() {
+            const badge = document.getElementById('status-badge');
+            const text = document.getElementById('status-text');
+            if(!text) return;
+            text.textContent = state.gameStatus.toUpperCase();
+            let color = 'bg-gray-600 text-gray-300';
+            if (state.gameStatus === 'active') color = 'bg-green-500 text-white shadow-[0_0_10px_#22c55e]';
+            if (state.gameStatus === 'paused') color = 'bg-yellow-500 text-black';
+            badge.className = `px-3 py-1 rounded-full text-xs font-bold transition-colors flex items-center gap-2 ${color}`;
+        }
+
+        function router(viewName) {
+            state.view = viewName;
+            const container = document.getElementById('view-container');
+            container.innerHTML = '';
+            if (viewName === 'welcome') renderWelcome(container);
+            else if (viewName === 'game') renderGame(container);
+            else if (viewName === 'result') renderResult(container);
+            else if (viewName === 'dashboard') renderDashboard(container);
+            else if (viewName === 'admin') renderAdmin(container);
+            lucide.createIcons();
+        }
+
+        // ==========================================
+        // 🏠 歡迎頁 
+        // ==========================================
+        function renderWelcome(container) {
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-center space-y-6 animate-fade-in w-full overflow-y-auto">
+                    <h1 class="text-5xl md:text-6xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-yellow-600 drop-shadow-sm leading-tight">
+                        元宵猜燈謎<br>
+                        <span class="text-3xl md:text-4xl">Lantern Festival Riddles</span>
+                    </h1>
+                    <p class="text-yellow-200 font-medium bg-black/30 px-4 py-2 rounded-full text-sm mt-2 border border-yellow-500/30">
+                        從 40 題中隨機抽 5 題 ‧ 全對即可獲得抽獎資格 ‧ <span class="text-red-300">每人限玩一次！</span>
+                    </p>
+                    
+                    <div class="w-full max-w-md bg-red-900/60 backdrop-blur-md border border-yellow-500/30 rounded-3xl p-8 shadow-2xl">
+                        
+                        <div class="grid grid-cols-3 gap-4 mb-4">
+                            <div class="col-span-1">
+                                <label class="block text-yellow-400 text-sm font-bold mb-1 text-left">班級 / Class</label>
+                                <input type="text" id="user-class" class="w-full p-3 rounded-xl bg-black/40 border border-yellow-600/30 text-white outline-none focus:border-yellow-400 transition" placeholder="ex: 301">
+                            </div>
+                            <div class="col-span-2">
+                                <label class="block text-yellow-400 text-sm font-bold mb-1 text-left">姓名 / Name</label>
+                                <input type="text" id="user-name" class="w-full p-3 rounded-xl bg-black/40 border border-yellow-600/30 text-white outline-none focus:border-yellow-400 transition" placeholder="請輸入姓名...">
+                            </div>
+                        </div>
+                        
+                        <button id="start-btn" onclick="startGame()" class="w-full bg-gray-600 text-gray-400 font-bold text-xl py-4 rounded-xl flex items-center justify-center gap-2 cursor-not-allowed" disabled>
+                            <i data-lucide="loader-2" class="animate-spin"></i> 載入中...
+                        </button>
+                    </div>
+                </div>
+            `;
+            updateWelcomeButton();
+        }
+
+        function updateWelcomeButton() {
+            const btn = document.getElementById('start-btn');
+            if (!btn) return;
+            if (state.gameStatus === 'active') {
+                btn.disabled = false;
+                btn.className = "w-full bg-gradient-to-r from-yellow-600 to-yellow-500 text-red-950 font-black text-xl py-4 rounded-xl shadow-lg hover:scale-105 transition cursor-pointer";
+                btn.innerHTML = `<i data-lucide="play"></i> 開始挑戰`;
+            } else {
+                btn.disabled = true;
+                btn.className = "w-full bg-gray-600 text-gray-400 font-bold text-xl py-4 rounded-xl flex items-center justify-center gap-2 cursor-not-allowed";
+                btn.innerHTML = state.gameStatus === 'idle' ? '活動準備中' : '活動暫停/結束';
+            }
+            lucide.createIcons();
+        }
+
+        function startGame() {
+            const cls = document.getElementById('user-class').value.trim();
+            const name = document.getElementById('user-name').value.trim();
+            if (!cls || !name) return alert('請完整輸入班級與姓名喔！');
+            if (state.gameStatus !== 'active') return alert('活動尚未開始');
+            
+            const hasPlayed = state.participants.some(p => p.class === cls && p.name === name);
+            if (hasPlayed) {
+                return alert('⚠️ 您已經參加過囉！每個人只能挑戰一次喔！');
+            }
+
+            state.user.class = cls;
+            state.user.name = name;
+            state.user.score = 0;
+            state.user.answers = [];
+
+            state.activeRiddles = shuffleArray([...state.riddles]).slice(0, state.TOTAL_QUESTIONS);
+            router('game');
+        }
+
+        // ==========================================
+        // 🎮 遊戲頁
+        // ==========================================
+        let currentQIndex = 0;
+        let timeLeft = 30;
+
+        function renderGame(container) {
+            currentQIndex = 0;
+            showQuestion(container);
+        }
+
+        function showQuestion(container) {
+            if (currentQIndex >= state.activeRiddles.length) {
+                router('result');
+                return;
+            }
+            
+            const q = state.activeRiddles[currentQIndex];
+            timeLeft = 30;
+            const shuffledOptions = shuffleArray([...q.opts]);
+
+            container.innerHTML = `
+                <div class="max-w-md mx-auto h-full flex flex-col justify-center pb-10 w-full animate-fade-in">
+                    <div class="flex justify-between items-center mb-6 bg-black/30 p-4 rounded-2xl border border-white/10">
+                        <div class="flex items-center gap-2 text-yellow-400 font-mono text-2xl font-bold">
+                            <i data-lucide="timer"></i> <span id="timer">${timeLeft}</span>
+                        </div>
+                        <div class="text-gray-400 font-mono text-lg">第 ${currentQIndex + 1} 題 / 共 ${state.TOTAL_QUESTIONS} 題</div>
+                    </div>
+                    
+                    <div class="bg-white text-gray-900 rounded-[2rem] p-8 shadow-2xl mb-6 flex flex-col items-center text-center border-4 border-yellow-500 relative overflow-hidden min-h-[200px] justify-center">
+                        <div class="absolute top-0 left-0 h-2 bg-gray-200 w-full">
+                            <div id="progress-bar" class="h-full bg-green-500 transition-all duration-1000" style="width: 100%"></div>
+                        </div>
+                        <h3 class="text-2xl font-bold mb-4 text-red-900 leading-snug">${q.cn}</h3>
+                        <p class="text-gray-500 font-medium text-sm border-t border-gray-100 pt-4 w-full">${q.en}</p>
+                    </div>
+                    
+                    <div class="grid gap-3">
+                        ${shuffledOptions.map((opt, i) => `
+                            <button onclick="handleAnswer('${opt}')" class="w-full bg-red-900/40 hover:bg-yellow-500 hover:text-red-950 border border-yellow-500/30 text-white font-bold text-lg py-4 rounded-xl transition-all shadow-md backdrop-blur-sm flex items-center justify-between px-6">
+                                <span class="flex items-center gap-3"><span class="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm">${['A','B','C','D'][i]}</span>${opt}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+            
+            if (state.timer) clearInterval(state.timer);
+            state.timer = setInterval(() => {
+                timeLeft--;
+                const tEl = document.getElementById('timer');
+                const pEl = document.getElementById('progress-bar');
+                if(tEl) tEl.innerText = timeLeft;
+                if(pEl) pEl.style.width = `${(timeLeft/30)*100}%`;
+                if (timeLeft <= 0) { clearInterval(state.timer); handleAnswer(null); }
+            }, 1000);
+        }
+
+        window.handleAnswer = function(ans) {
+            clearInterval(state.timer);
+            const q = state.activeRiddles[currentQIndex];
+            if (ans === q.ans) state.user.score++;
+            currentQIndex++;
+            showQuestion(document.getElementById('view-container'));
+        };
+
+        // ==========================================
+        // 🏆 結果頁
+        // ==========================================
+        function renderResult(container) {
+            submitScore();
+            const isPerfect = state.user.score === state.TOTAL_QUESTIONS;
+            let messageTitle = isPerfect ? "恭喜全對！太棒了！" : "挑戰完成！";
+            let messageDesc = isPerfect ? 
+                "<span class='text-green-400 font-bold'>🎉 您已成功獲得抽獎資格！</span>" : 
+                `<span class='text-red-400 font-bold'>很可惜...必須 ${state.TOTAL_QUESTIONS} 題全對才能抽獎喔！</span>`;
+
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-full text-center space-y-8 animate-fade-in">
+                    <i data-lucide="${isPerfect ? 'award' : 'party-popper'}" class="text-yellow-400 w-24 h-24 animate-bounce"></i>
+                    <div class="bg-red-900/60 backdrop-blur-md border border-yellow-500/50 p-10 rounded-3xl shadow-2xl w-full max-w-md">
+                        <h2 class="text-3xl font-bold text-white mb-2">${messageTitle}</h2>
+                        <div class="flex justify-center items-baseline gap-2 mb-4 bg-black/20 py-6 rounded-2xl mt-6">
+                            <span class="text-7xl font-black ${isPerfect ? 'text-green-400' : 'text-yellow-400'}">${state.user.score}</span>
+                            <span class="text-xl text-gray-500">/ ${state.TOTAL_QUESTIONS}</span>
+                        </div>
+                        <p class="mb-8">${messageDesc}</p>
+                        <button onclick="router('dashboard')" class="w-full bg-white text-red-900 font-bold py-4 rounded-xl hover:bg-gray-100 shadow-lg flex items-center justify-center gap-2">
+                            <i data-lucide="bar-chart-3"></i> 查看英雄榜與大螢幕
+                        </button>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        function submitScore() {
+            const time = Math.floor(Math.random() * 100) + 100;
+            state.participants.push({
+                class: state.user.class,
+                name: state.user.name,
+                score: state.user.score,
+                time: time
+            });
+            fetch(GAS_API_URL, {
+                method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({
+                    action: 'submit_score',
+                    class: state.user.class,
+                    name: state.user.name,
+                    score: state.user.score,
+                    time: time
+                })
+            });
+        }
+
+        // ==========================================
+        // 📊 大螢幕 Dashboard
+        // ==========================================
+        function renderDashboard(container) {
+             // 🎯 動態產生抽獎按鈕 (需管理員權限)
+             const drawButtonHTML = state.isAdmin 
+                ? `<button onclick="toggleDraw()" id="draw-btn" class="px-8 py-3 lg:px-10 lg:py-4 bg-gradient-to-r from-yellow-500 to-orange-500 text-red-900 text-xl lg:text-2xl font-bold rounded-full shadow-lg hover:scale-105 transition flex items-center gap-2">
+                    <i data-lucide="sparkles"></i> 開始抽獎
+                   </button>`
+                : `<button onclick="alert('🔒 此功能已鎖定！\\n請先點擊右上角「後台」登入管理者，才能進行抽獎。')" class="px-8 py-3 lg:px-10 lg:py-4 bg-gray-800/80 text-gray-400 text-lg lg:text-xl font-bold rounded-full shadow-lg border border-gray-600 transition flex items-center gap-2 hover:bg-gray-700 cursor-pointer">
+                    <i data-lucide="lock"></i> 抽獎已鎖定 (需管理員)
+                   </button>`;
+
+             const clearWinnersBtnHTML = state.isAdmin
+                ? `<button onclick="clearWinners()" class="mt-4 w-full text-xs text-red-400 hover:text-white border border-red-900/50 hover:border-red-500 rounded p-2 transition hover:bg-red-900">🗑️ 清空中獎名單</button>`
+                : ``;
+
+             container.innerHTML = `
+                <div class="h-full flex flex-col gap-4 animate-fade-in pb-4">
+                    <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        <div class="bg-yellow-500/20 p-4 rounded-xl flex items-center gap-3">
+                            <div class="text-2xl font-bold font-mono text-white" id="stat-total">${state.participants.length}</div>
+                            <div class="text-xs text-yellow-200/60 uppercase">人參加</div>
+                        </div>
+                        <div class="bg-green-500/20 p-4 rounded-xl flex items-center gap-3">
+                            <div class="text-2xl font-bold font-mono text-green-400" id="stat-perfect">
+                                ${state.participants.filter(p => p.score === state.TOTAL_QUESTIONS).length}
+                            </div>
+                            <div class="text-xs text-green-200/60 uppercase">人全對</div>
+                        </div>
+                    </div>
+                    
+                    <!-- 螢幕下半部：排行榜(左) / 抽獎畫面(中) / 中獎名單(右) -->
+                    <div class="flex-grow flex flex-col lg:flex-row gap-4 h-full overflow-hidden">
+                        
+                        <!-- 左：英雄榜 Top 10 -->
+                        <div class="w-full lg:w-1/4 bg-black/20 rounded-2xl p-4 flex flex-col border border-white/5 backdrop-blur-sm shadow-xl min-h-[250px]">
+                            <h3 class="font-bold text-yellow-200 mb-4 flex items-center gap-2"><i data-lucide="crown"></i> 英雄榜</h3>
+                            <div id="leaderboard-list" class="flex-grow overflow-y-auto space-y-2 pr-2"></div>
+                        </div>
+                        
+                        <!-- 中：抽獎主畫面 -->
+                        <div class="w-full lg:w-2/4 bg-red-900/40 border border-yellow-500/30 rounded-2xl p-6 flex flex-col items-center justify-center relative shadow-2xl min-h-[300px]">
+                             <h2 class="text-3xl lg:text-4xl font-black text-yellow-400 mb-2 tracking-widest text-center">LUCKY DRAW</h2>
+                             <p class="text-gray-300 text-xs lg:text-sm mb-6 bg-black/30 px-4 py-1 rounded-full text-center">滿分且尚未中獎者</p>
+                             
+                             <div class="w-full max-w-md h-32 lg:h-48 bg-black/40 rounded-3xl flex items-center justify-center mb-6 lg:mb-8 border-2 border-yellow-500/30 shadow-[0_0_30px_rgba(234,179,8,0.2)]">
+                                <div class="text-3xl md:text-5xl font-black text-white text-center px-4" id="winner-display">?</div>
+                             </div>
+                             
+                             <!-- 動態載入按鈕 -->
+                             ${drawButtonHTML}
+                        </div>
+
+                        <!-- 右：中獎名單 -->
+                        <div class="w-full lg:w-1/4 bg-black/20 rounded-2xl p-4 flex flex-col border border-white/5 backdrop-blur-sm shadow-xl min-h-[250px]">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="font-bold text-green-400 flex items-center gap-2"><i data-lucide="gift"></i> 中獎區</h3>
+                                <span class="bg-green-600 text-white text-xs px-2 py-1 rounded-full" id="winner-count">0 人</span>
+                            </div>
+                            <div id="winners-list" class="flex-grow overflow-y-auto space-y-2 pr-2"></div>
+                            ${clearWinnersBtnHTML}
+                        </div>
+
+                    </div>
+                </div>
+            `;
+            renderDashboardUI();
+        }
+
+        function renderDashboardUI() {
+            // 更新狀態列數字
+            const totalEl = document.getElementById('stat-total');
+            const perfectEl = document.getElementById('stat-perfect');
+            if(totalEl) totalEl.innerText = state.participants.length;
+            if(perfectEl) perfectEl.innerText = state.participants.filter(p => p.score === state.TOTAL_QUESTIONS).length;
+
+            // 繪製英雄榜
+            const list = document.getElementById('leaderboard-list');
+            if(list) {
+                const sorted = [...state.participants].sort((a, b) => b.score - a.score || a.time - b.time);
+                list.innerHTML = sorted.slice(0, 10).map((p, i) => `
+                    <div class="flex items-center bg-white/5 p-2 rounded-lg text-sm border border-white/5 transition hover:bg-white/10">
+                        <div class="w-6 h-6 rounded-full ${i<3 ? 'bg-yellow-500 text-red-900':'bg-gray-600 text-white'} flex items-center justify-center font-bold mr-3 text-xs">${i+1}</div>
+                        <div class="flex-grow text-gray-200 font-bold truncate">${p.class} ${p.name}</div>
+                        <div class="text-yellow-400 font-bold font-mono text-base">${p.score}</div>
+                    </div>
+                `).join('');
+            }
+
+            // 繪製中獎區
+            renderWinnersList();
+        }
+
+        let isRolling = false, drawInterval;
+        let currentDrawUser = null;
+
+        window.toggleDraw = function() {
+            if (!state.isAdmin) return alert("請先登入管理員才能抽獎！");
+
+            const display = document.getElementById('winner-display');
+            const btn = document.getElementById('draw-btn');
+            
+            const candidates = state.participants.filter(p => 
+                p.score === state.TOTAL_QUESTIONS && 
+                !state.winners.some(w => w.class === p.class && w.name === p.name)
+            );
+
+            if(!candidates.length) return alert(`目前沒有符合抽獎資格的玩家！\n(可能尚未有人滿分，或所有滿分者皆已中獎)`);
+
+            if(!isRolling) {
+                isRolling = true;
+                display.classList.remove('scale-110','text-yellow-300'); 
+                btn.innerHTML = `<i data-lucide="stop-circle"></i> 停止 STOP`;
+                btn.className = "px-10 py-4 bg-red-600 text-white text-xl lg:text-2xl font-bold rounded-full shadow-lg hover:scale-105 transition flex items-center gap-2 border-2 border-red-400";
+                
+                drawInterval = setInterval(() => {
+                    currentDrawUser = candidates[Math.floor(Math.random()*candidates.length)];
+                    display.innerText = `${currentDrawUser.class} ${currentDrawUser.name}`;
+                }, 50);
+            } else {
+                isRolling = false;
+                clearInterval(drawInterval);
+                display.classList.add('scale-110','text-yellow-300', 'transition-transform');
+                btn.innerHTML = `<i data-lucide="sparkles"></i> 再次抽獎`;
+                btn.className = "px-10 py-4 bg-gradient-to-r from-yellow-500 to-orange-500 text-red-900 text-xl lg:text-2xl font-bold rounded-full shadow-lg hover:scale-105 transition flex items-center gap-2 border-2 border-yellow-400";
+                
+                if (currentDrawUser && !state.winners.some(w => w.class === currentDrawUser.class && w.name === currentDrawUser.name)) {
+                    state.winners.push(currentDrawUser);
+                    localStorage.setItem('lantern_winners', JSON.stringify(state.winners));
+                    renderWinnersList();
+                }
+            }
+            lucide.createIcons();
+        }
+
+        window.renderWinnersList = function() {
+            const list = document.getElementById('winners-list');
+            const countStr = document.getElementById('winner-count');
+            if(!list) return;
+
+            if(countStr) countStr.innerText = `${state.winners.length} 人`;
+
+            if(state.winners.length === 0) {
+                list.innerHTML = `<div class="text-gray-400 text-sm text-center mt-8">尚無中獎紀錄</div>`;
+                return;
+            }
+
+            const reversedWinners = [...state.winners].reverse();
+            list.innerHTML = reversedWinners.map((w, i) => `
+                <div class="flex items-center bg-green-900/50 p-2 rounded-lg text-sm border border-green-500/30 animate-fade-in shadow-md">
+                    <div class="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center font-bold mr-3 text-xs flex-shrink-0">
+                        <i data-lucide="gift" class="w-3 h-3"></i>
+                    </div>
+                    <div class="flex-grow text-green-100 font-bold truncate">${w.class} ${w.name}</div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        window.clearWinners = function() {
+            if (!state.isAdmin) return alert("請先登入管理員才能清空！");
+            if(confirm("確定要清空中獎名單嗎？(注意：這將會清除您瀏覽器中紀錄的得獎者，名單內的人將可以再次被抽中)")) {
+                state.winners = [];
+                localStorage.removeItem('lantern_winners'); 
+                renderWinnersList();
+            }
+        }
+
+
+        // ==========================================
+        // ⚙️ 後台 (題目管理 + 匯出 + 修改密碼功能)
+        // ==========================================
+        function renderAdmin(container) {
+            if (!state.isAdmin) {
+                container.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full">
+                        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-xs text-gray-800">
+                            <h2 class="text-xl font-bold mb-4 flex items-center gap-2 text-red-900"><i data-lucide="lock"></i> 管理者登入</h2>
+                            <input type="password" id="admin-pwd" class="w-full border p-2 rounded mb-4 text-black outline-none focus:border-red-500" placeholder="請輸入密碼">
+                            <button onclick="adminLogin()" class="w-full bg-red-800 text-white py-2 rounded font-bold hover:bg-red-700 transition">登入</button>
+                        </div>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="bg-white text-gray-800 p-6 rounded-3xl h-full shadow-xl flex flex-col overflow-hidden">
+                    <div class="flex justify-between items-center mb-4 pb-2 border-b">
+                        <h2 class="text-xl font-bold text-red-900 flex items-center gap-2"><i data-lucide="settings"></i> 管理中控台</h2>
+                        <button onclick="state.isAdmin=false;router('admin')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded transition">登出</button>
+                    </div>
+
+                    <div class="flex-grow overflow-y-auto pr-2 space-y-6 pb-6">
+                        <section>
+                            <h3 class="font-bold text-gray-600 mb-2 flex gap-2"><i data-lucide="toggle-left"></i> 活動狀態控制</h3>
+                            <div class="grid grid-cols-3 gap-2">
+                                <button onclick="updateStatus('idle')" class="p-3 rounded-lg border-2 border-yellow-200 bg-yellow-50 text-yellow-800 font-bold hover:bg-yellow-100 transition">準備中</button>
+                                <button onclick="updateStatus('active')" class="p-3 rounded-lg border-2 border-green-200 bg-green-50 text-green-800 font-bold hover:bg-green-100 transition">進行中</button>
+                                <button onclick="updateStatus('ended')" class="p-3 rounded-lg border-2 border-red-200 bg-red-50 text-red-800 font-bold hover:bg-red-100 transition">已結束</button>
+                            </div>
+                        </section>
+
+                        <section>
+                            <h3 class="font-bold text-gray-600 mb-2 flex gap-2"><i data-lucide="download"></i> 數據匯出與管理</h3>
+                            <div class="grid grid-cols-2 gap-2 mb-2">
+                                <button onclick="exportLeaderboard()" class="bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 flex items-center justify-center gap-2 transition shadow">
+                                    <i data-lucide="file-spreadsheet"></i> 匯出總成績
+                                </button>
+                                <button onclick="exportPerfectScores()" class="bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700 flex items-center justify-center gap-2 transition shadow">
+                                    <i data-lucide="award"></i> 匯出滿分名單
+                                </button>
+                            </div>
+                            <button onclick="exportActualWinners()" class="w-full mb-3 bg-green-600 text-white py-3 rounded-xl font-bold hover:bg-green-700 flex items-center justify-center gap-2 transition shadow">
+                                <i data-lucide="gift"></i> 匯出「已中獎」名單
+                            </button>
+                            <button onclick="clearData()" class="w-full border border-red-200 text-red-600 py-2 rounded-xl text-sm hover:bg-red-50 transition">🗑️ 清空雲端所有玩家數據</button>
+                        </section>
+
+                        <section>
+                            <div class="flex justify-between items-center mb-2">
+                                <h3 class="font-bold text-gray-600 flex gap-2"><i data-lucide="book-open"></i> 題庫管理 (${state.riddles.length}題)</h3>
+                                <div class="space-x-2">
+                                    <button onclick="restoreDefaultRiddles()" class="bg-gray-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-gray-700 transition">還原預設 (${BUILT_IN_RIDDLES.length}題)</button>
+                                    <button onclick="addRiddle()" class="bg-green-600 text-white px-3 py-1 rounded text-xs font-bold hover:bg-green-700 transition">+ 新增題目</button>
+                                </div>
+                            </div>
+                            <div class="bg-gray-100 rounded-xl p-2 h-40 overflow-y-auto text-sm border border-gray-200 shadow-inner" id="riddle-list">
+                                <!-- 題目列表 -->
+                            </div>
+                        </section>
+
+                        <!-- 🔐 新增安全設定：修改密碼 -->
+                        <section class="pt-4 border-t border-gray-200">
+                            <h3 class="font-bold text-gray-600 mb-2 flex gap-2"><i data-lucide="shield-check"></i> 安全設定 (修改密碼)</h3>
+                            <div class="flex gap-2">
+                                <input type="password" id="new-admin-pwd" class="flex-grow border border-gray-300 p-2 rounded-lg text-sm outline-none focus:border-red-500" placeholder="輸入新的後台密碼">
+                                <button onclick="changeAdminPassword()" class="bg-gray-800 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-gray-700 transition shadow">更新密碼</button>
+                            </div>
+                            <p class="text-xs text-gray-400 mt-2">提示：若您的 Google Apps Script 後端腳本有寫死密碼，這裡更改後可能導致同步失敗。建議後端不要檢查密碼，或同步修改後端設定。</p>
+                        </section>
+                    </div>
+                </div>
+            `;
+            renderRiddleTable();
+            lucide.createIcons();
+        }
+
+        window.adminLogin = function() {
+            const p = document.getElementById('admin-pwd').value;
+            if(p === getAdminPwd()) { 
+                state.isAdmin = true; 
+                router('admin'); 
+            } else {
+                alert('密碼錯誤！請重試。');
+            }
+        }
+
+        window.changeAdminPassword = function() {
+            const newPwd = document.getElementById('new-admin-pwd').value;
+            if(!newPwd || newPwd.trim() === '') {
+                return alert("請輸入有效的新密碼！");
+            }
+            if(confirm("確定要修改管理員登入密碼嗎？")) {
+                localStorage.setItem('admin_pwd', newPwd.trim());
+                document.getElementById('new-admin-pwd').value = '';
+                alert("✅ 密碼已成功修改！下次登入請使用新密碼。");
+            }
+        }
+
+        function renderRiddleTable() {
+            const list = document.getElementById('riddle-list');
+            if(!list) return;
+            if(state.riddles.length === 0) {
+                list.innerHTML = `<div class="p-4 text-center text-gray-400">目前沒有題目，請點擊上方新增或還原預設。</div>`;
+                return;
+            }
+            list.innerHTML = state.riddles.map((r, i) => `
+                <div class="bg-white p-3 rounded-lg mb-2 shadow-sm border border-gray-200">
+                    <div class="flex justify-between font-bold text-red-900 mb-1">
+                        <span>Q${i+1}. ${r.cn}</span>
+                        <button onclick="deleteRiddle(${i})" class="text-red-500 hover:bg-red-50 px-2 rounded transition">刪除</button>
+                    </div>
+                    <div class="text-gray-500 text-xs mb-2">${r.en}</div>
+                    <div class="grid grid-cols-4 gap-1 text-xs text-center text-gray-600">
+                        ${r.opts.map(o => `<span class="${o===r.ans?'bg-green-100 text-green-700 font-bold border-green-200':''} border rounded py-1">${o}</span>`).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        window.addRiddle = function() {
+            const cn = prompt("中文題目:"); if(!cn) return;
+            const en = prompt("英文題目 (可留空):") || " ";
+            const ans = prompt("正確答案:");
+            const optsStr = prompt("四個選項 (請用逗號分隔，例如: 蘋果,香蕉,橘子,葡萄):");
+            if(!ans || !optsStr) return alert("資料不完整");
+            
+            const opts = optsStr.split(/[,，]/).map(s=>s.trim());
+            if(opts.length !== 4) return alert("請輸入剛好 4 個選項，並用逗號隔開");
+            if(!opts.includes(ans)) return alert("您設定的四個選項中，必須包含正確答案！");
+
+            state.riddles.push({ id: Date.now(), cn, en, ans, opts });
+            renderRiddleTable();
+            saveRiddlesToBackend();
+        }
+
+        window.deleteRiddle = function(index) {
+            if(!confirm("確定刪除此題？")) return;
+            state.riddles.splice(index, 1);
+            renderRiddleTable();
+            saveRiddlesToBackend();
+        }
+
+        window.restoreDefaultRiddles = function() {
+            if(!confirm(`確定還原為預設的 ${BUILT_IN_RIDDLES.length} 題？這將會覆蓋您自訂的題目。`)) return;
+            state.riddles = [...BUILT_IN_RIDDLES];
+            renderRiddleTable();
+            saveRiddlesToBackend();
+        }
+
+        function saveRiddlesToBackend() {
+            const tableData = state.riddles.map((r, idx) => [
+                idx + 1, r.cn, r.en, r.ans, r.opts[0], r.opts[1], r.opts[2], r.opts[3]
+            ]);
+
+            fetch(GAS_API_URL, {
+                method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({
+                    action: 'manage_riddle',
+                    method: 'delete',
+                    allRiddles: tableData,
+                    password: getAdminPwd() // 🔐 使用動態密碼
+                })
+            });
+        }
+
+        // ==========================================
+        // 匯出功能
+        // ==========================================
+        window.exportLeaderboard = function() {
+            let csv = "\uFEFFClass,Name,Score,Time\n"; 
+            const sorted = [...state.participants].sort((a,b) => b.score - a.score || a.time - b.time);
+            sorted.forEach(p => { csv += `${p.class},${p.name},${p.score},${p.time}\n` });
+            downloadCSV(csv, 'Lantern_Festival_All_Scores.csv');
+        }
+
+        window.exportPerfectScores = function() {
+            let csv = "\uFEFFClass,Name,Score\n";
+            const winners = state.participants.filter(p => p.score === state.TOTAL_QUESTIONS);
+            winners.forEach(p => { csv += `${p.class},${p.name},${p.score}\n` });
+            downloadCSV(csv, 'Lantern_Festival_Perfect_Scores.csv');
+        }
+
+        window.exportActualWinners = function() {
+            if(state.winners.length === 0) return alert("目前還沒有人中獎喔！");
+            let csv = "\uFEFFNo.,Class,Name\n";
+            state.winners.forEach((w, i) => { csv += `${i+1},${w.class},${w.name}\n` });
+            downloadCSV(csv, 'Lantern_Festival_Actual_Winners.csv');
+        }
+
+        function downloadCSV(content, fileName) {
+            const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", url);
+            link.setAttribute("download", fileName);
+            document.body.appendChild(link);
+            link.click();
+            URL.revokeObjectURL(url);
+        }
+
+        window.updateStatus = function(s) {
+            fetch(GAS_API_URL, {
+                method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'update_status', status: s, password: getAdminPwd() }) // 🔐 使用動態密碼
+            });
+            state.gameStatus = s; 
+            alert("狀態切換指令已送出，請等待同步。");
+            updateStatusUI();
+        }
+        
+        window.clearData = function() {
+            if(confirm("確定清空所有玩家數據？(注意：此操作會刪除試算表上的玩家紀錄，不可復原！)")) {
+                fetch(GAS_API_URL, {
+                    method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'clear_data', password: getAdminPwd() }) // 🔐 使用動態密碼
+                });
+                state.participants = [];
+                state.winners = []; 
+                localStorage.removeItem('lantern_winners'); 
+                alert("已發送清空指令，試算表資料即將清空。");
+            }
+        }
+    </script>
+</body>
+</html>
